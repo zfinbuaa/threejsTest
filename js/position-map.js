@@ -1,5 +1,6 @@
 import { ModelLoader } from './model-loader.js';
 import { TreeView } from './tree-view.js';
+import { AnnotationRenderer } from './annotation.js';
 
 export class PositionMap {
   constructor(sceneManager, uiElements) {
@@ -265,58 +266,14 @@ export class PositionMap {
   }
 
   /**
-   * Get target parts for annotation (only the meshes that are loaded as parts)
+   * Get numbered parts from the hierarchy tree for annotation.
    */
-  getTargetParts() {
-    return this.partMeshes.filter((m) => m.visible !== false && m.parent && this._isDescendantOfLoadedParts(m));
-  }
-
-  _isDescendantOfLoadedParts(mesh) {
-    let current = mesh;
-    while (current) {
-      for (const pm of this.partModels) {
-        if (current === pm.root) return true;
-      }
-      current = current.parent;
-    }
-    return false;
-  }
-
-  /**
-   * Export position map PNG
-   * @param {Function} annotationRenderer - function to render annotations on 2D canvas
-   */
-  async exportToPNG(annotationRenderer) {
-    this._setStatus('正在导出位置图...');
-
-    // Ensure the scene is fully rendered
-    this.sceneManager.renderer.render(this.sceneManager.scene, this.sceneManager.camera);
-
-    // Get the 3D canvas data
-    const dataUrl = this.sceneManager.renderer.domElement.toDataURL('image/png');
-
-    if (annotationRenderer) {
-      return await annotationRenderer(dataUrl, this.getTargetParts(), 'position');
-    }
-
-    // Simple download without annotation
-    this._downloadPNG(dataUrl, '位置图.png');
-    this._setStatus('位置图已导出');
-  }
-
-  _downloadPNG(dataUrl, filename) {
-    if (window.electronAPI) {
-      window.electronAPI.savePNG(dataUrl).then((savedPath) => {
-        if (savedPath) {
-          this._setStatus(`已保存到: ${savedPath}`);
-        }
-      });
-    } else {
-      const link = document.createElement('a');
-      link.download = filename;
-      link.href = dataUrl;
-      link.click();
-      this._setStatus('位置图已下载');
-    }
+  getNumberedParts() {
+    const parts = [];
+    this.partModels.forEach((pm) => {
+      const numbered = AnnotationRenderer.collectNumberedParts(pm.hierarchy, []);
+      parts.push(...numbered);
+    });
+    return parts;
   }
 }

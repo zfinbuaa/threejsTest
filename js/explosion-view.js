@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ModelLoader } from './model-loader.js';
 import { TreeView } from './tree-view.js';
+import { AnnotationRenderer } from './annotation.js';
 
 export class ExplosionView {
   constructor(sceneManager, uiElements) {
@@ -335,45 +336,17 @@ export class ExplosionView {
     return data;
   }
 
-  getTargetParts() {
-    return this.partMeshes.filter((m) => m.visible !== false);
+  getNumberedParts() {
+    const parts = [];
+    this.partModels.forEach((pm) => {
+      const numbered = AnnotationRenderer.collectNumberedParts(pm.hierarchy, []);
+      parts.push(...numbered);
+    });
+    return parts;
   }
 
   _setStatus(msg) {
     const statusEl = document.getElementById('status-text');
     if (statusEl) statusEl.textContent = msg;
-  }
-
-  async exportToPNG(annotationRenderer) {
-    this._setStatus('正在导出爆炸图...');
-
-    this.sceneManager.renderer.render(this.sceneManager.scene, this.sceneManager.camera);
-    const dataUrl = this.sceneManager.renderer.domElement.toDataURL('image/png');
-
-    if (annotationRenderer) {
-      return await annotationRenderer(
-        dataUrl,
-        this.getTargetParts(),
-        'explosion',
-        this.getExplosionData()
-      );
-    }
-
-    this._downloadPNG(dataUrl, '爆炸图.png');
-    this._setStatus('爆炸图已导出');
-  }
-
-  _downloadPNG(dataUrl, filename) {
-    if (window.electronAPI) {
-      window.electronAPI.savePNG(dataUrl).then((savedPath) => {
-        if (savedPath) this._setStatus(`已保存到: ${savedPath}`);
-      });
-    } else {
-      const link = document.createElement('a');
-      link.download = filename;
-      link.href = dataUrl;
-      link.click();
-      this._setStatus(`${filename}已下载`);
-    }
   }
 }

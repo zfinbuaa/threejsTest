@@ -221,15 +221,15 @@ class App {
   }
 
   async _exportPositionMap() {
-    const targetParts = this.positionMap.getTargetParts();
+    const numberedParts = this.positionMap.getNumberedParts();
 
-    if (targetParts.length === 0) {
-      this._setStatus('未找到目标部件，请先加载部件模型');
+    if (numberedParts.length === 0) {
+      this._setStatus('未找到带序号的部件，请在结构树中为部件设置序号');
       return;
     }
 
     try {
-      const dataUrl = await this.exportManager.exportPositionMap(targetParts);
+      const dataUrl = await this.exportManager.exportPositionMap(numberedParts);
       const result = await this.exportManager.downloadPNG(dataUrl, '位置图.png');
       if (result) {
         this._setStatus(`位置图已导出: ${result}`);
@@ -241,16 +241,16 @@ class App {
   }
 
   async _exportExplosionView() {
-    const targetParts = this.explosionView.getTargetParts();
+    const numberedParts = this.explosionView.getNumberedParts();
 
-    if (targetParts.length === 0) {
-      this._setStatus('未找到目标部件，请先加载部件模型');
+    if (numberedParts.length === 0) {
+      this._setStatus('未找到带序号的部件，请在结构树中为部件设置序号');
       return;
     }
 
     try {
       const explosionData = this.explosionView.getExplosionData();
-      const dataUrl = await this.exportManager.exportExplosionView(targetParts, explosionData);
+      const dataUrl = await this.exportManager.exportExplosionView(numberedParts, explosionData);
       const result = await this.exportManager.downloadPNG(dataUrl, '爆炸图.png');
       if (result) {
         this._setStatus(`爆炸图已导出: ${result}`);

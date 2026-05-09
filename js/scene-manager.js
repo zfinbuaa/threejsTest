@@ -10,20 +10,15 @@ export class SceneManager {
       canvas,
       antialias: true,
       preserveDrawingBuffer: true,
-      alpha: true,
+      alpha: false,
     });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.setClearColor(0xffffff, 1);
 
-    // Scene
+    // Scene (pure white, no fog)
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xf0f0f0);
-    this.scene.fog = new THREE.Fog(0xf0f0f0, 20, 100);
+    this.scene.background = new THREE.Color(0xffffff);
 
     // Camera
     this.camera = new THREE.PerspectiveCamera(
@@ -47,28 +42,6 @@ export class SceneManager {
     // Lighting
     this._setupLights();
 
-    // Grid
-    this.gridHelper = new THREE.GridHelper(20, 20, 0xcccccc, 0xe0e0e0);
-    this.scene.add(this.gridHelper);
-
-    // Ground plane for shadows
-    const groundGeo = new THREE.PlaneGeometry(30, 30);
-    const groundMat = new THREE.MeshStandardMaterial({
-      color: 0xeeeeee,
-      roughness: 0.8,
-      metalness: 0.1,
-    });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -5;
-    ground.receiveShadow = true;
-    ground.name = '__ground__';
-    this.scene.add(ground);
-
-    // Axes helper (small)
-    this.axesHelper = new THREE.AxesHelper(3);
-    this.scene.add(this.axesHelper);
-
     // Container for loaded models
     this.modelContainer = new THREE.Group();
     this.modelContainer.name = '__model_container__';
@@ -84,34 +57,20 @@ export class SceneManager {
   }
 
   _setupLights() {
-    // Ambient light - base illumination
-    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.7);
     ambient.name = '__ambient__';
     this.scene.add(ambient);
 
-    // Hemisphere light - sky/ground
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x888888, 0.5);
     hemiLight.name = '__hemi__';
     this.scene.add(hemiLight);
 
-    // Main directional light with shadows
-    this.mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
-    this.mainLight.position.set(10, 15, 10);
-    this.mainLight.castShadow = true;
-    this.mainLight.shadow.mapSize.width = 2048;
-    this.mainLight.shadow.mapSize.height = 2048;
-    this.mainLight.shadow.camera.near = 0.5;
-    this.mainLight.shadow.camera.far = 100;
-    this.mainLight.shadow.camera.left = -20;
-    this.mainLight.shadow.camera.right = 20;
-    this.mainLight.shadow.camera.top = 20;
-    this.mainLight.shadow.camera.bottom = -20;
-    this.mainLight.shadow.bias = -0.0001;
+    this.mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    this.mainLight.position.set(8, 12, 10);
     this.mainLight.name = '__main_light__';
     this.scene.add(this.mainLight);
 
-    // Fill light from opposite side
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
     fillLight.position.set(-5, 3, -5);
     fillLight.name = '__fill_light__';
     this.scene.add(fillLight);

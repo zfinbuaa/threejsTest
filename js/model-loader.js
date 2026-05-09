@@ -65,6 +65,7 @@ export class ModelLoader {
       isMesh: node.isMesh || node.type === 'Mesh',
       isGroup: node.isGroup || node.isObject3D,
       object3D: node,
+      _seqNumber: null,
       children: [],
     };
 
@@ -194,8 +195,7 @@ export class ModelLoader {
     });
     const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
     bodyMesh.name = '车身';
-    bodyMesh.castShadow = true;
-    bodyMesh.receiveShadow = true;
+
     group.add(bodyMesh);
 
     // Roof
@@ -203,7 +203,6 @@ export class ModelLoader {
     const roofMesh = new THREE.Mesh(roofGeo, bodyMat.clone());
     roofMesh.position.set(-0.3, 1.0, 0);
     roofMesh.name = '车顶';
-    roofMesh.castShadow = true;
     group.add(roofMesh);
 
     // Windows (as separate meshes so they get transparency)
@@ -247,7 +246,6 @@ export class ModelLoader {
     engine.position.set(0.8, 0.1, 0);
     engine.rotation.z = Math.PI / 2;
     engine.name = '发动机';
-    engine.castShadow = true;
     group.add(engine);
 
     // Transmission
@@ -260,7 +258,6 @@ export class ModelLoader {
     const transmission = new THREE.Mesh(transGeo, transMat);
     transmission.position.set(0, 0, 0);
     transmission.name = '变速箱';
-    transmission.castShadow = true;
     group.add(transmission);
 
     // Radiator
@@ -273,7 +270,6 @@ export class ModelLoader {
     const radiator = new THREE.Mesh(radGeo, radMat);
     radiator.position.set(2.0, 0.2, 0);
     radiator.name = '散热器';
-    radiator.castShadow = true;
     group.add(radiator);
 
     // Battery
@@ -286,7 +282,6 @@ export class ModelLoader {
     const battery = new THREE.Mesh(batteryGeo, batteryMat);
     battery.position.set(-1.2, 0.1, 0.5);
     battery.name = '电池';
-    battery.castShadow = true;
     group.add(battery);
 
     // Suspension front
@@ -299,13 +294,13 @@ export class ModelLoader {
     const suspensionF = new THREE.Mesh(suspGeo, suspMat);
     suspensionF.position.set(2.2, -0.3, 0.7);
     suspensionF.name = '前悬架(右)';
-    suspensionF.castShadow = true;
+    suspensionF
     group.add(suspensionF);
 
     const suspensionFL = new THREE.Mesh(suspGeo, suspMat);
     suspensionFL.position.set(2.2, -0.3, -0.7);
     suspensionFL.name = '前悬架(左)';
-    suspensionFL.castShadow = true;
+    suspensionFL
     group.add(suspensionFL);
 
     // Wheels
@@ -326,7 +321,6 @@ export class ModelLoader {
       wheel.position.set(x, y, z);
       wheel.rotation.y = Math.PI / 2;
       wheel.name = `车轮${i + 1}`;
-      wheel.castShadow = true;
       group.add(wheel);
     });
 
@@ -341,7 +335,6 @@ export class ModelLoader {
     exhaust.position.set(-2.5, -0.4, 0.3);
     exhaust.rotation.z = Math.PI / 2;
     exhaust.name = '排气管';
-    exhaust.castShadow = true;
     group.add(exhaust);
 
     return group;

@@ -205,6 +205,43 @@ body {
   outline: 1px solid #e94560;
 }
 
+/* Visibility toggle */
+.tree-node-header .node-vis-toggle {
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  user-select: none;
+}
+
+.tree-node-header .node-vis-toggle:hover {
+  color: #e94560;
+}
+
+/* Number input in tree */
+.tree-node-header .node-number-input {
+  width: 32px;
+  padding: 1px 2px;
+  font-size: 10px;
+  background: #1a1a2e;
+  border: 1px solid #0f3460;
+  color: #ccc;
+  border-radius: 2px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.tree-node-header .node-number-input:focus {
+  border-color: #e94560;
+  outline: none;
+}
+
+.tree-node-header .node-number-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .tree-children {
   padding-left: 16px;
 }

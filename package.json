@@ -10,7 +10,7 @@
   },
   "build": {
     "appId": "com.modelviewer.app",
-    "productName": "3D模型可视化工具",
+    "productName": "ModelViewer",
     "directories": {
       "output": "dist"
     },
@@ -23,7 +23,18 @@
       "node_modules/**/*"
     ],
     "win": {
-      "target": "portable"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "sign": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
     }
   },
   "dependencies": {

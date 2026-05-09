@@ -1,9 +1,5 @@
 import * as THREE from 'three';
 
-/**
- * Annotation renderer for 2D overlay
- * Style: Arabic numeral + black circle + white border + black connecting line
- */
 export class AnnotationRenderer {
   constructor(canvas, sceneManager) {
     this.canvas = canvas;
@@ -11,175 +7,201 @@ export class AnnotationRenderer {
     this.ctx = canvas.getContext('2d');
   }
 
-  /**
-   * Resize the annotation canvas to match the 3D canvas
-   */
   resize() {
     const threeCanvas = this.sceneManager.renderer.domElement;
     this.canvas.width = threeCanvas.width;
     this.canvas.height = threeCanvas.height;
   }
 
-  /**
-   * Clear the annotation canvas
-   */
   clear() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
   /**
-   * Render annotations for target parts
-   * @param {THREE.Mesh[]} parts - Array of target meshes
-   * @param {THREE.Camera} camera
-   * @returns {Array<{screenX, screenY, number}>} annotation positions
+   * Build numbered parts list from hierarchy tree nodes.
+   * Returns [{mesh, seqNumber, worldPos}] sorted by seqNumber.
    */
-  renderAnnotations(parts) {
+  static collectNumberedParts(hierarchyRoot, meshes) {
+    const numbered = [];
+
+    function walk(node) {
+      if (node.isMesh && node._seqNumber != null && node._seqNumber > 0 && node.object3D) {
+        const mesh = node.object3D;
+        if (mesh.visible !== false) {
+          const box = new THREE.Box3().setFromObject(mesh);
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+          numbered.push({
+            mesh,
+            seqNumber: node._seqNumber,
+            worldPos: center,
+            name: node.name,
+          });
+        }
+      }
+      if (node.children) {
+        node.children.forEach(walk);
+      }
+    }
+
+    walk(hierarchyRoot);
+
+    // Sort by sequence number
+    numbered.sort((a, b) => a.seqNumber - b.seqNumber);
+    return numbered;
+  }
+
+  /**
+   * Render horizontal annotations: circles aligned in vertical columns on left/right.
+   */
+  renderAnnotations(numberedParts) {
     this.resize();
     this.clear();
 
+    if (numberedParts.length === 0) return [];
+
     const camera = this.sceneManager.camera;
-    const annotations = [];
+    const cw = this.canvas.width;
+    const ch = this.canvas.height;
+    const ctx = this.ctx;
 
-    // First pass: project all positions to screen
-    const screenPositions = [];
-    parts.forEach((mesh, index) => {
-      const worldPos = this._getMeshWorldCenter(mesh);
-      const screenPos = worldPos.clone().project(camera);
+    // Project all parts to screen
+    const items = [];
+    numberedParts.forEach((p) => {
+      const screenPos = p.worldPos.clone().project(camera);
+      if (screenPos.z > 1) return; // behind camera
 
-      // Check if in front of camera and within viewport
-      if (screenPos.z > 1) return;
+      const sx = (screenPos.x * 0.5 + 0.5) * cw;
+      const sy = (-screenPos.y * 0.5 + 0.5) * ch;
 
-      const x = (screenPos.x * 0.5 + 0.5) * this.canvas.width;
-      const y = (-screenPos.y * 0.5 + 0.5) * this.canvas.height;
+      if (sx < -50 || sx > cw + 50 || sy < -50 || sy > ch + 50) return;
 
-      if (x < -50 || x > this.canvas.width + 50 || y < -50 || y > this.canvas.height + 50) return;
-
-      screenPositions.push({
-        index: index + 1,
-        x,
-        y,
-        worldPos,
-        mesh,
-      });
+      items.push({ ...p, screenX: sx, screenY: sy });
     });
 
-    if (screenPositions.length === 0) return [];
+    if (items.length === 0) return [];
 
-    // Sort by position to assign anchor directions and avoid overlap
-    const occupiedAreas = [];
+    // Sort by screen Y (top to bottom) for alternating
+    items.sort((a, b) => a.screenY - b.screenY);
 
-    screenPositions.forEach((item) => {
-      const result = this._drawAnnotation(item, occupiedAreas);
-      if (result) {
-        annotations.push(result);
-        occupiedAreas.push({
-          x: result.screenX,
-          y: result.screenY,
-          radius: result.radius || 25,
-        });
+    // Margin from canvas edges for annotations
+    const marginX = 50;
+    const leftColumnX = marginX;
+    const rightColumnX = cw - marginX;
+
+    // Circle properties
+    const circleRadius = 13;
+    const minCircleSpacing = circleRadius * 2 + 6;
+
+    // Assign sides: alternate to distribute evenly
+    const leftItems = [];
+    const rightItems = [];
+    items.forEach((item, i) => {
+      if (i % 2 === 0) {
+        item.side = 'left';
+        leftItems.push(item);
+      } else {
+        item.side = 'right';
+        rightItems.push(item);
       }
+    });
+
+    // Resolve Y overlaps within each column
+    this._resolveYOverlaps(leftItems, minCircleSpacing, ch);
+    this._resolveYOverlaps(rightItems, minCircleSpacing, ch);
+
+    const annotations = [];
+
+    // Draw left column
+    leftItems.forEach((item) => {
+      this._drawHorizontalAnnotation(ctx, item, leftColumnX, circleRadius, 'right');
+      annotations.push(item);
+    });
+
+    // Draw right column
+    rightItems.forEach((item) => {
+      this._drawHorizontalAnnotation(ctx, item, rightColumnX, circleRadius, 'left');
+      annotations.push(item);
     });
 
     return annotations;
   }
 
   /**
-   * Draw a single annotation
+   * Adjust Y positions to avoid overlapping circles within a column.
    */
-  _drawAnnotation(item, occupiedAreas) {
-    const { index, x, y } = item;
-    const ctx = this.ctx;
+  _resolveYOverlaps(items, minSpacing, canvasHeight) {
+    if (items.length <= 1) return;
 
-    // Determine anchor direction (which side to place the circle)
-    // Default: place circle to the upper-right of the point
-    const directions = [
-      { dx: 1, dy: -1, name: 'top-right' },
-      { dx: -1, dy: -1, name: 'top-left' },
-      { dx: 1, dy: 1, name: 'bottom-right' },
-      { dx: -1, dy: 1, name: 'bottom-left' },
-      { dx: 0, dy: -1, name: 'top' },
-      { dx: 1, dy: 0, name: 'right' },
-      { dx: -1, dy: 0, name: 'left' },
-      { dx: 0, dy: 1, name: 'bottom' },
-    ];
-
-    // Try each direction until we find one without overlapping
-    const lineLength = 45;
-    const circleRadius = 14;
-    const circleDiameter = circleRadius * 2;
-
-    let bestDir = directions[0];
-    for (const dir of directions) {
-      const circleX = x + dir.dx * lineLength;
-      const circleY = y + dir.dy * lineLength;
-
-      const hasOverlap = occupiedAreas.some((area) => {
-        const dist = Math.sqrt((circleX - area.x) ** 2 + (circleY - area.y) ** 2);
-        return dist < (circleRadius + (area.radius || 25) + 4);
-      });
-
-      if (!hasOverlap) {
-        bestDir = dir;
-        break;
+    // Attempt to keep original Y, but push apart if too close
+    for (let i = 1; i < items.length; i++) {
+      const prev = items[i - 1];
+      const curr = items[i];
+      const gap = curr.screenY - prev.screenY;
+      if (gap < minSpacing) {
+        curr.screenY = prev.screenY + minSpacing;
       }
     }
 
-    const circleX = x + bestDir.dx * lineLength;
-    const circleY = y + bestDir.dy * lineLength;
+    // Clamp to canvas
+    items.forEach((item) => {
+      item.screenY = Math.max(18, Math.min(canvasHeight - 18, item.screenY));
+    });
+  }
 
-    // Clamp to canvas bounds
-    const clampedX = Math.max(circleRadius + 4, Math.min(this.canvas.width - circleRadius - 4, circleX));
-    const clampedY = Math.max(circleRadius + 4, Math.min(this.canvas.height - circleRadius - 4, circleY));
+  /**
+   * Draw a horizontal annotation: line + circle + number.
+   * @param {'left'|'right'} lineDir - which way the line goes from circle to part
+   */
+  _drawHorizontalAnnotation(ctx, item, columnX, radius, lineDir) {
+    const partX = item.screenX;
+    const partY = item.screenY;
+    const circleX = columnX;
+    const circleY = item.screenY;
 
-    // Draw connecting line from part center to circle
-    const lineEndX = clampedX - bestDir.dx * circleRadius * 0.8;
-    const lineEndY = clampedY - bestDir.dy * circleRadius * 0.8;
+    // Connecting line: from circle edge to part
+    const lineStartX = lineDir === 'right' ? circleX + radius : circleX - radius;
+    const lineEndX = partX;
 
     ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(lineEndX, lineEndY);
+    ctx.moveTo(lineStartX, circleY);
+    ctx.lineTo(lineEndX, partY);
     ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Draw white border circle
+    // Small dot at part center
     ctx.beginPath();
-    ctx.arc(clampedX, clampedY, circleRadius, 0, Math.PI * 2);
+    ctx.arc(partX, partY, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#000000';
+    ctx.fill();
+
+    // Black circle with white fill
+    ctx.beginPath();
+    ctx.arc(circleX, circleY, radius, 0, Math.PI * 2);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    // Another thin white ring outside the black border
+    // Outer white border ring
     ctx.beginPath();
-    ctx.arc(clampedX, clampedY, circleRadius + 2.5, 0, Math.PI * 2);
+    ctx.arc(circleX, circleY, radius + 2, 0, Math.PI * 2);
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Draw number
+    // Number
     ctx.fillStyle = '#000000';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = 'bold 14px "Microsoft YaHei", Arial, sans-serif';
-    ctx.fillText(String(index), clampedX, clampedY + 1);
-
-    return {
-      index,
-      screenX: clampedX,
-      screenY: clampedY,
-      partX: x,
-      partY: y,
-      radius: circleRadius,
-      mesh: item.mesh,
-      worldPos: item.worldPos,
-    };
+    ctx.font = 'bold 13px "Microsoft YaHei", Arial, sans-serif';
+    ctx.fillText(String(item.seqNumber), circleX, circleY + 1);
   }
 
   /**
-   * Draw explosion thrust lines
-   * @param {Array} explosionData - Array of {from: Vector3, to: Vector3}
+   * Draw explosion thrust lines.
    */
   drawThrustLines(explosionData) {
     const camera = this.sceneManager.camera;
@@ -195,7 +217,6 @@ export class AnnotationRenderer {
       const x2 = (toScreen.x * 0.5 + 0.5) * this.canvas.width;
       const y2 = (-toScreen.y * 0.5 + 0.5) * this.canvas.height;
 
-      // Draw dashed line
       this.ctx.beginPath();
       this.ctx.setLineDash([8, 4]);
       this.ctx.moveTo(x1, y1);
@@ -205,7 +226,6 @@ export class AnnotationRenderer {
       this.ctx.stroke();
       this.ctx.setLineDash([]);
 
-      // Draw arrow at the end (exploded position)
       this._drawArrow(x1, y1, x2, y2);
     });
   }
@@ -231,15 +251,8 @@ export class AnnotationRenderer {
     ctx.fill();
   }
 
-  _getMeshWorldCenter(mesh) {
-    const box = new THREE.Box3().setFromObject(mesh);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    return center;
-  }
-
   /**
-   * Composite the 3D render with annotations and return final data URL
+   * Composite 3D render with annotations and return data URL.
    */
   compositeWithRender(dataUrl, renderAnnotationsFn) {
     this.resize();
@@ -248,20 +261,14 @@ export class AnnotationRenderer {
     const img = new Image();
     return new Promise((resolve) => {
       img.onload = () => {
-        // Draw the 3D render onto the annotation canvas
         this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
 
-        // Draw annotations on top
         if (renderAnnotationsFn) {
           renderAnnotationsFn(this.ctx);
         }
 
-        // Get composite result
         const compositeDataUrl = this.canvas.toDataURL('image/png');
-
-        // Clear the annotation canvas so live view is not affected
         this.clear();
-
         resolve(compositeDataUrl);
       };
       img.src = dataUrl;

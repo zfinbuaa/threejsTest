@@ -2,14 +2,12 @@ export class TreeView {
   constructor(containerEl, options = {}) {
     this.container = containerEl;
     this.onNodeClick = options.onNodeClick || null;
-    this.onColorChange = options.onColorChange || null;
+    this.onVisibilityToggle = options.onVisibilityToggle || null;
+    this.onNumberChange = options.onNumberChange || null;
     this.selectedNodeId = null;
     this.expandedNodes = new Set();
   }
 
-  /**
-   * Render tree from hierarchy data
-   */
   render(hierarchy, title = '') {
     this.container.innerHTML = '';
     if (title) {
@@ -21,9 +19,6 @@ export class TreeView {
     this._renderNode(hierarchy, this.container, 0);
   }
 
-  /**
-   * Recursively render a tree node
-   */
   _renderNode(node, parentEl, depth) {
     const nodeEl = document.createElement('div');
     nodeEl.className = 'tree-node';
@@ -35,7 +30,7 @@ export class TreeView {
       headerEl.classList.add('selected');
     }
 
-    // Expand/collapse toggle (only for groups with children)
+    // Expand/collapse toggle
     const hasChildren = node.children && node.children.length > 0;
     const toggleEl = document.createElement('span');
     toggleEl.className = 'expand-toggle';
@@ -48,6 +43,29 @@ export class TreeView {
       });
     }
     headerEl.appendChild(toggleEl);
+
+    // Visibility toggle (eye icon) - for mesh nodes
+    if (node.isMesh && node.object3D) {
+      const visEl = document.createElement('span');
+      visEl.className = 'node-vis-toggle';
+      const visible = node.object3D.visible !== false;
+      visEl.textContent = visible ? '👁' : '○';
+      visEl.title = visible ? '点击隐藏' : '点击显示';
+      visEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        node.object3D.visible = !(node.object3D.visible !== false);
+        visEl.textContent = node.object3D.visible !== false ? '👁' : '○';
+        if (this.onVisibilityToggle) {
+          this.onVisibilityToggle(node, node.object3D.visible !== false);
+        }
+      });
+      headerEl.appendChild(visEl);
+
+      // Visibility also affects children
+      if (node.object3D.visible === false) {
+        headerEl.style.opacity = '0.4';
+      }
+    }
 
     // Icon
     const iconEl = document.createElement('span');
@@ -75,8 +93,32 @@ export class TreeView {
       headerEl.appendChild(colorEl);
     }
 
+    // Number input for mesh nodes
+    if (node.isMesh) {
+      const numInput = document.createElement('input');
+      numInput.type = 'number';
+      numInput.className = 'node-number-input';
+      numInput.min = 1;
+      numInput.max = 999;
+      numInput.step = 1;
+      numInput.placeholder = '#';
+      numInput.title = '标注序号（留空则不标注）';
+      numInput.value = node._seqNumber || '';
+      numInput.addEventListener('click', (e) => e.stopPropagation());
+      numInput.addEventListener('input', (e) => {
+        const val = e.target.value ? parseInt(e.target.value) : null;
+        node._seqNumber = val;
+        if (this.onNumberChange) {
+          this.onNumberChange(node, val);
+        }
+      });
+      headerEl.appendChild(numInput);
+    }
+
     // Click handler
-    headerEl.addEventListener('click', () => {
+    headerEl.addEventListener('click', (e) => {
+      // Don't trigger if clicking on input
+      if (e.target.tagName === 'INPUT') return;
       this.selectNode(node);
       if (this.onNodeClick) {
         this.onNodeClick(node);
@@ -119,7 +161,6 @@ export class TreeView {
 
   selectNode(node) {
     this.selectedNodeId = node.id;
-    // Update visual selection
     const allHeaders = this.container.querySelectorAll('.tree-node-header');
     allHeaders.forEach((h) => h.classList.remove('selected'));
     const targetHeader = this.container.querySelector(`[data-node-id="${node.id}"] > .tree-node-header`);
