@@ -1,0 +1,36 @@
+{
+  "name": "threejs-model-viewer",
+  "version": "1.0.0",
+  "description": "3D model position map & explosion view tool",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "node server.js",
+    "build": "electron-builder"
+  },
+  "build": {
+    "appId": "com.modelviewer.app",
+    "productName": "3D模型可视化工具",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "css/**/*",
+      "js/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "portable"
+    }
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.9.0"
+  }
+}

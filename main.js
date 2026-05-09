@@ -1,0 +1,133 @@
+const { app, BrowserWindow, Menu, dialog, ipcMain } = require('electron');
+const path = require('path');
+
+let mainWindow;
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1400,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 700,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+    title: '3D模型可视化工具 - 位置图 / 爆炸图',
+  });
+
+  mainWindow.loadFile('index.html');
+
+  const template = [
+    {
+      label: '文件',
+      submenu: [
+        {
+          label: '加载车壳模型',
+          click: async () => {
+            const result = await dialog.showOpenDialog(mainWindow, {
+              title: '选择车壳VRML模型',
+              filters: [{ name: 'VRML', extensions: ['wrl', 'vrml'] }],
+              properties: ['openFile', 'multiSelections'],
+            });
+            if (!result.canceled) {
+              mainWindow.webContents.send('load-shell-models', result.filePaths);
+            }
+          },
+        },
+        {
+          label: '加载目标部件',
+          click: async () => {
+            const result = await dialog.showOpenDialog(mainWindow, {
+              title: '选择目标部件VRML模型',
+              filters: [{ name: 'VRML', extensions: ['wrl', 'vrml'] }],
+              properties: ['openFile', 'multiSelections'],
+            });
+            if (!result.canceled) {
+              mainWindow.webContents.send('load-part-models', result.filePaths);
+            }
+          },
+        },
+        { type: 'separator' },
+        { label: '退出', role: 'quit' },
+      ],
+    },
+    {
+      label: '视图',
+      submenu: [
+        { label: '重置相机', click: () => mainWindow.webContents.send('reset-camera') },
+        { label: '正视', click: () => mainWindow.webContents.send('view-front') },
+        { label: '俯视', click: () => mainWindow.webContents.send('view-top') },
+        { label: '侧视', click: () => mainWindow.webContents.send('view-side') },
+      ],
+    },
+    {
+      label: '模式',
+      submenu: [
+        {
+          label: '位置图模式',
+          type: 'radio',
+          checked: true,
+          click: () => mainWindow.webContents.send('switch-mode', 'position'),
+        },
+        {
+          label: '爆炸图模式',
+          type: 'radio',
+          checked: false,
+          click: () => mainWindow.webContents.send('switch-mode', 'explosion'),
+        },
+      ],
+    },
+    {
+      label: '帮助',
+      submenu: [
+        {
+          label: '关于',
+          click: () => {
+            dialog.showMessageBox(mainWindow, {
+              type: 'info',
+              title: '关于',
+              message: '3D模型可视化工具 v1.0\n基于 Three.js + Electron',
+              detail: '支持VRML模型的位置图与爆炸图渲染导出',
+            });
+          },
+        },
+      ],
+    },
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+}
+
+app.whenReady().then(createWindow);
+
+app.on('window-all-closed', () => {
+  app.quit();
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
+});
+
+ipcMain.handle('save-png', async (event, dataUrl) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: '导出PNG图片',
+    defaultPath: 'output.png',
+    filters: [{ name: 'PNG Image', extensions: ['png'] }],
+  });
+  if (!result.canceled) {
+    const fs = require('fs');
+    const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+    fs.writeFileSync(result.filePath, base64Data, 'base64');
+    return result.filePath;
+  }
+  return null;
+});
