@@ -258,8 +258,8 @@ export class AnnotationRenderer {
     this.resize();
     this.clear();
 
-    const img = new Image();
     return new Promise((resolve) => {
+      const img = new Image();
       img.onload = () => {
         this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
 
@@ -270,6 +270,11 @@ export class AnnotationRenderer {
         const compositeDataUrl = this.canvas.toDataURL('image/png');
         this.clear();
         resolve(compositeDataUrl);
+      };
+      img.onerror = () => {
+        console.error('Failed to load render image for compositing');
+        this.clear();
+        resolve(dataUrl); // Fallback to raw render
       };
       img.src = dataUrl;
     });

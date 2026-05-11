@@ -42,52 +42,67 @@ class App {
     // Mode state
     this.currentMode = 'position'; // 'position' | 'explosion'
 
-    this._init();
+    this._init().catch((err) => {
+      console.error('App init failed:', err);
+      const statusEl = document.getElementById('status-text');
+      if (statusEl) statusEl.textContent = '初始化失败: ' + (err.message || err);
+    });
   }
 
   async _init() {
-    // Set status
     this._setStatus('正在初始化...');
 
-    // Initialize scene manager
-    this.sceneManager = new SceneManager(this.threeCanvas);
+    try {
+      // Initialize scene manager
+      this.sceneManager = new SceneManager(this.threeCanvas);
 
-    // Initialize annotation renderer
-    this.annotationRenderer = new AnnotationRenderer(this.annotationCanvas, this.sceneManager);
+      // Initialize annotation renderer
+      this.annotationRenderer = new AnnotationRenderer(this.annotationCanvas, this.sceneManager);
 
-    // Initialize export manager
-    this.exportManager = new ExportManager(this.sceneManager, this.annotationRenderer);
+      // Initialize export manager
+      this.exportManager = new ExportManager(this.sceneManager, this.annotationRenderer);
 
-    // Initialize position map
-    this.positionMap = new PositionMap(this.sceneManager, this.positionUI);
+      // Initialize position map
+      this.positionMap = new PositionMap(this.sceneManager, this.positionUI);
 
-    // Initialize explosion view
-    this.explosionView = new ExplosionView(this.sceneManager, this.explosionUI);
+      // Initialize explosion view
+      this.explosionView = new ExplosionView(this.sceneManager, this.explosionUI);
 
-    // Wire up export for position map
-    this.positionUI.btnExportPosition.addEventListener('click', async () => {
-      await this._exportPositionMap();
-    });
+      // Wire up export for position map
+      this.positionUI.btnExportPosition.addEventListener('click', async () => {
+        await this._exportPositionMap();
+      });
 
-    // Wire up export for explosion view
-    this.explosionUI.btnExportExplosion.addEventListener('click', async () => {
-      await this._exportExplosionView();
-    });
+      // Wire up export for explosion view
+      this.explosionUI.btnExportExplosion.addEventListener('click', async () => {
+        await this._exportExplosionView();
+      });
 
-    // Mode switching
-    this._setupModeSwitching();
+      // Mode switching
+      this._setupModeSwitching();
 
-    // Electron API
-    this._setupElectronAPI();
+      // Electron API
+      this._setupElectronAPI();
 
-    // Load placeholder models for demo
-    await this._loadPlaceholders();
+      // Load placeholder models for demo
+      try {
+        await this._loadPlaceholders();
+      } catch (err) {
+        console.error('Placeholder load failed:', err);
+        this._setStatus('示例模型加载失败，可手动加载VRML文件');
+      }
 
-    // Handle resize
-    this._onResize = () => {
-      this.annotationRenderer.resize();
-    };
-    window.addEventListener('resize', this._onResize);
+      // Handle resize
+      this._onResize = () => {
+        this.annotationRenderer.resize();
+      };
+      window.addEventListener('resize', this._onResize);
+
+      this._setStatus('就绪');
+    } catch (err) {
+      console.error('Init error:', err);
+      this._setStatus('初始化错误: ' + (err.message || err));
+    }
   }
 
   _setupModeSwitching() {
@@ -224,11 +239,13 @@ class App {
     const numberedParts = this.positionMap.getNumberedParts();
 
     if (numberedParts.length === 0) {
+      alert('未找到带序号的部件！\n\n请在左侧结构树中为各部件输入序号（1,2,3...），留空的部件将不标注。');
       this._setStatus('未找到带序号的部件，请在结构树中为部件设置序号');
       return;
     }
 
     try {
+      this._setStatus('正在导出位置图...');
       const dataUrl = await this.exportManager.exportPositionMap(numberedParts);
       const result = await this.exportManager.downloadPNG(dataUrl, '位置图.png');
       if (result) {
@@ -236,6 +253,7 @@ class App {
       }
     } catch (err) {
       console.error('Export failed:', err);
+      alert('导出失败: ' + (err.message || err));
       this._setStatus(`导出失败: ${err.message}`);
     }
   }
@@ -244,11 +262,13 @@ class App {
     const numberedParts = this.explosionView.getNumberedParts();
 
     if (numberedParts.length === 0) {
+      alert('未找到带序号的部件！\n\n请在左侧结构树中为各部件输入序号（1,2,3...），留空的部件将不标注。');
       this._setStatus('未找到带序号的部件，请在结构树中为部件设置序号');
       return;
     }
 
     try {
+      this._setStatus('正在导出爆炸图...');
       const explosionData = this.explosionView.getExplosionData();
       const dataUrl = await this.exportManager.exportExplosionView(numberedParts, explosionData);
       const result = await this.exportManager.downloadPNG(dataUrl, '爆炸图.png');
@@ -257,6 +277,7 @@ class App {
       }
     } catch (err) {
       console.error('Export failed:', err);
+      alert('导出失败: ' + (err.message || err));
       this._setStatus(`导出失败: ${err.message}`);
     }
   }

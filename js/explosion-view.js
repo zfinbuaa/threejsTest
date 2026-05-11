@@ -27,12 +27,8 @@ export class ExplosionView {
 
   _setupUI() {
     // Load parts button
-    this.ui.btnLoadPartsExplosion.addEventListener('click', () => {
-      if (window.electronAPI) {
-        this._setStatus('请通过 文件→加载目标部件 菜单加载');
-      } else {
-        this._createFileInput('.wrl', true, (files) => this.loadPartModels(files));
-      }
+    this.ui.btnLoadPartsExplosion.addEventListener('click', async () => {
+      this._openFileDialog('选择目标部件VRML模型', (paths) => this.loadPartModels(paths));
     });
 
     // Auto explode
@@ -82,6 +78,17 @@ export class ExplosionView {
         this.exitDragMode();
       }
     });
+  }
+
+  async _openFileDialog(title, callback) {
+    if (window.electronAPI && window.electronAPI.openFileDialog) {
+      const paths = await window.electronAPI.openFileDialog({ title });
+      if (paths && paths.length > 0) {
+        callback(paths);
+      }
+    } else {
+      this._createFileInput('.wrl', true, (files) => callback(files));
+    }
   }
 
   _createFileInput(accept, multiple, callback) {

@@ -22,23 +22,13 @@ export class PositionMap {
 
   _setupUI() {
     // Load shell button
-    this.ui.btnLoadShell.addEventListener('click', () => {
-      // Trigger via Electron API if available, otherwise use file input
-      if (window.electronAPI) {
-        // Handled by main process menu
-        this._setStatus('请通过 文件→加载车壳模型 菜单加载');
-      } else {
-        this._createFileInput('.wrl', true, (files) => this.loadShellModels(files));
-      }
+    this.ui.btnLoadShell.addEventListener('click', async () => {
+      this._openFileDialog('选择车壳VRML模型', (paths) => this.loadShellModels(paths));
     });
 
     // Load parts button
-    this.ui.btnLoadParts.addEventListener('click', () => {
-      if (window.electronAPI) {
-        this._setStatus('请通过 文件→加载目标部件 菜单加载');
-      } else {
-        this._createFileInput('.wrl', true, (files) => this.loadPartModels(files));
-      }
+    this.ui.btnLoadParts.addEventListener('click', async () => {
+      this._openFileDialog('选择目标部件VRML模型', (paths) => this.loadPartModels(paths));
     });
 
     // Shell selector
@@ -64,6 +54,17 @@ export class PositionMap {
       window.electronAPI.onLoadPartModels((paths) => {
         this.loadPartModels(paths);
       });
+    }
+  }
+
+  async _openFileDialog(title, callback) {
+    if (window.electronAPI && window.electronAPI.openFileDialog) {
+      const paths = await window.electronAPI.openFileDialog({ title });
+      if (paths && paths.length > 0) {
+        callback(paths);
+      }
+    } else {
+      this._createFileInput('.wrl', true, (files) => callback(files));
     }
   }
 

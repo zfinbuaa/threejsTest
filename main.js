@@ -117,6 +117,18 @@ app.on('activate', () => {
   }
 });
 
+ipcMain.handle('open-file-dialog', async (event, options) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: options.title || '选择文件',
+    filters: options.filters || [{ name: 'VRML', extensions: ['wrl', 'vrml'] }],
+    properties: ['openFile', 'multiSelections'],
+  });
+  if (!result.canceled) {
+    return result.filePaths;
+  }
+  return [];
+});
+
 ipcMain.handle('save-png', async (event, dataUrl) => {
   const result = await dialog.showSaveDialog(mainWindow, {
     title: '导出PNG图片',

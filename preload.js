@@ -9,4 +9,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onViewSide: (callback) => ipcRenderer.on('view-side', () => callback()),
   onSwitchMode: (callback) => ipcRenderer.on('switch-mode', (_, mode) => callback(mode)),
   savePNG: (dataUrl) => ipcRenderer.invoke('save-png', dataUrl),
+  openFileDialog: (options) => ipcRenderer.invoke('open-file-dialog', options),
 });
