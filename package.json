@@ -20,7 +20,7 @@
       "index.html",
       "css/**/*",
       "js/**/*",
-      "node_modules/**/*"
+      "vendor/**/*"
     ],
     "win": {
       "target": [
