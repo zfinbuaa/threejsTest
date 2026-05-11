@@ -22,12 +22,6 @@
       "js/**/*",
       "node_modules/**/*"
     ],
-    "extraResources": [
-      {
-        "from": "assets/models",
-        "to": "models"
-      }
-    ],
     "win": {
       "target": [
         {
