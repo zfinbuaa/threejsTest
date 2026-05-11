@@ -7,15 +7,13 @@ export class ExportManager {
   }
 
   async exportPositionMap(numberedParts) {
-    this.sceneManager.renderer.render(this.sceneManager.scene, this.sceneManager.camera);
-    return this._composite(() => {
+    return this._composeAndExport(() => {
       this.annotationRenderer.renderAnnotations(numberedParts);
     });
   }
 
   async exportExplosionView(numberedParts, explosionData) {
-    this.sceneManager.renderer.render(this.sceneManager.scene, this.sceneManager.camera);
-    return this._composite(() => {
+    return this._composeAndExport(() => {
       if (explosionData && explosionData.length > 0) {
         this.annotationRenderer.drawThrustLines(explosionData);
       }
@@ -23,28 +21,69 @@ export class ExportManager {
     });
   }
 
-  _composite(drawFn) {
-    const r = this.annotationRenderer;
-    r.resize();
-    r.clear();
+  _composeAndExport(drawAnnotationsFn) {
+    const renderer = this.sceneManager.renderer;
+    const camera = this.sceneManager.camera;
+    const scene = this.sceneManager.scene;
 
-    // Draw 3D render directly from the WebGL canvas
-    r.ctx.drawImage(
-      this.sceneManager.renderer.domElement,
-      0, 0,
-      r.canvas.width, r.canvas.height
-    );
+    // Force a render so the WebGL canvas has the latest frame
+    renderer.render(scene, camera);
 
-    // Draw annotations/thrust lines
-    drawFn();
+    // Get the 3D render as a data URL
+    const renderDataUrl = renderer.domElement.toDataURL('image/png');
 
-    // Get composite
-    const result = r.canvas.toDataURL('image/png');
+    const w = renderer.domElement.width;
+    const h = renderer.domElement.height;
 
-    // Clean up
-    r.clear();
+    // Create an offscreen canvas for compositing
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = w;
+    offCanvas.height = h;
+    const offCtx = offCanvas.getContext('2d');
 
-    return result;
+    // Draw 3D render to offscreen canvas via Image
+    const img = new Image();
+
+    const doComposite = () => {
+      offCtx.drawImage(img, 0, 0, w, h);
+
+      // Temporarily point the annotation renderer at the offscreen canvas
+      const origCtx = this.annotationRenderer.ctx;
+      const origCanvas = this.annotationRenderer.canvas;
+      this.annotationRenderer.ctx = offCtx;
+      this.annotationRenderer.canvas = offCanvas;
+
+      try {
+        drawAnnotationsFn();
+      } catch (e) {
+        console.error('Annotation drawing error:', e);
+      }
+
+      // Restore original context
+      this.annotationRenderer.ctx = origCtx;
+      this.annotationRenderer.canvas = origCanvas;
+
+      return offCanvas.toDataURL('image/png');
+    };
+
+    return new Promise((resolve, reject) => {
+      img.onload = () => resolve(doComposite());
+
+      img.onerror = () => {
+        console.error('Failed to load render data URL');
+        reject(new Error('无法加载渲染图像'));
+      };
+
+      // Set src AFTER setting handlers, and check for immediate load
+      img.src = renderDataUrl;
+
+      // Data URLs may load synchronously; if already loaded, resolve now
+      if (img.complete) {
+        img.onload = null;
+        img.onerror = null;
+        resolve(doComposite());
+      }
+    });
   }
 
   async downloadPNG(dataUrl, filename = 'output.png') {
