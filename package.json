@@ -22,19 +22,20 @@
       "js/**/*",
       "node_modules/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "assets/models",
+        "to": "models"
+      }
+    ],
     "win": {
       "target": [
         {
-          "target": "nsis",
+          "target": "dir",
           "arch": ["x64"]
         }
       ],
       "sign": false
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
     }
   },
   "dependencies": {

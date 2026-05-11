@@ -2,6 +2,20 @@ const { app, BrowserWindow, Menu, dialog, ipcMain } = require('electron');
 const path = require('path');
 
 let mainWindow;
+let modelsPath;
+
+function getModelsPath() {
+  if (modelsPath) return modelsPath;
+  const exeDir = path.dirname(app.getPath('exe'));
+  const candidate = path.join(exeDir, 'models');
+  const fs = require('fs');
+  if (fs.existsSync(candidate)) {
+    modelsPath = candidate;
+  } else {
+    modelsPath = exeDir;
+  }
+  return modelsPath;
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -28,6 +42,7 @@ function createWindow() {
           click: async () => {
             const result = await dialog.showOpenDialog(mainWindow, {
               title: '选择车壳VRML模型',
+              defaultPath: getModelsPath(),
               filters: [{ name: 'VRML', extensions: ['wrl', 'vrml'] }],
               properties: ['openFile', 'multiSelections'],
             });
@@ -41,6 +56,7 @@ function createWindow() {
           click: async () => {
             const result = await dialog.showOpenDialog(mainWindow, {
               title: '选择目标部件VRML模型',
+              defaultPath: getModelsPath(),
               filters: [{ name: 'VRML', extensions: ['wrl', 'vrml'] }],
               properties: ['openFile', 'multiSelections'],
             });
@@ -120,6 +136,7 @@ app.on('activate', () => {
 ipcMain.handle('open-file-dialog', async (event, options) => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: options.title || '选择文件',
+    defaultPath: getModelsPath(),
     filters: options.filters || [{ name: 'VRML', extensions: ['wrl', 'vrml'] }],
     properties: ['openFile', 'multiSelections'],
   });
