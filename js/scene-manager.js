@@ -10,11 +10,10 @@ export class SceneManager {
       canvas,
       antialias: true,
       preserveDrawingBuffer: true,
-      alpha: false,
+      alpha: true,
     });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-    this.renderer.setClearColor(0xffffff, 1);
 
     // Scene (pure white, no fog)
     this.scene = new THREE.Scene();

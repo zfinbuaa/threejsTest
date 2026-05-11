@@ -22,16 +22,12 @@ export class ExportManager {
     });
   }
 
-  /**
-   * Render scene to render target, read pixels, composite with annotations.
-   * This bypasses any toDataURL issues with WebGL canvases.
-   */
   _composeAndExport(drawAnnotationsFn) {
     const renderer = this.sceneManager.renderer;
     const camera = this.sceneManager.camera;
     const scene = this.sceneManager.scene;
-
     const canvasEl = renderer.domElement;
+
     const w = canvasEl.width || canvasEl.clientWidth || 800;
     const h = canvasEl.height || canvasEl.clientHeight || 600;
 
@@ -39,59 +35,44 @@ export class ExportManager {
       throw new Error('Canvas has zero size');
     }
 
-    // Create a render target matching the main canvas
-    const renderTarget = new THREE.WebGLRenderTarget(w, h, {
-      format: THREE.RGBAFormat,
-      type: THREE.UnsignedByteType,
-    });
+    // Render to the main canvas
+    renderer.render(scene, camera);
+
+    // Read pixels directly from the WebGL framebuffer
+    const gl = renderer.getContext();
+    const pixels = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+    // Create a 2D canvas and write pixels (flip Y: WebGL origin is bottom-left)
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = w;
+    offCanvas.height = h;
+    const offCtx = offCanvas.getContext('2d');
+    const imgData = offCtx.createImageData(w, h);
+
+    for (let y = 0; y < h; y++) {
+      const srcRow = (h - 1 - y) * w * 4;
+      const dstRow = y * w * 4;
+      imgData.data.set(pixels.subarray(srcRow, srcRow + w * 4), dstRow);
+    }
+    offCtx.putImageData(imgData, 0, 0);
+
+    // Draw annotations on top
+    const origCtx = this.annotationRenderer.ctx;
+    const origCanvas = this.annotationRenderer.canvas;
+    this.annotationRenderer.ctx = offCtx;
+    this.annotationRenderer.canvas = offCanvas;
 
     try {
-      // Render scene to the offscreen render target
-      renderer.setRenderTarget(renderTarget);
-      renderer.render(scene, camera);
-      renderer.setRenderTarget(null);
-
-      // Read pixels from the render target
-      const pixelBuffer = new Uint8Array(w * h * 4);
-      renderer.readRenderTargetPixels(renderTarget, 0, 0, w, h, pixelBuffer);
-
-      // Create a 2D canvas and write pixels (flip Y: WebGL bottom-left → Canvas top-left)
-      const offCanvas = document.createElement('canvas');
-      offCanvas.width = w;
-      offCanvas.height = h;
-      const offCtx = offCanvas.getContext('2d');
-      const imgData = offCtx.createImageData(w, h);
-
-      for (let y = 0; y < h; y++) {
-        const srcRow = (h - 1 - y) * w * 4;
-        const dstRow = y * w * 4;
-        imgData.data.set(
-          pixelBuffer.subarray(srcRow, srcRow + w * 4),
-          dstRow
-        );
-      }
-      offCtx.putImageData(imgData, 0, 0);
-
-      // Draw annotations on top
-      const origCtx = this.annotationRenderer.ctx;
-      const origCanvas = this.annotationRenderer.canvas;
-      this.annotationRenderer.ctx = offCtx;
-      this.annotationRenderer.canvas = offCanvas;
-
-      try {
-        drawAnnotationsFn();
-      } catch (e) {
-        console.error('Annotation drawing error:', e);
-      }
-
-      this.annotationRenderer.ctx = origCtx;
-      this.annotationRenderer.canvas = origCanvas;
-
-      const result = offCanvas.toDataURL('image/png');
-      return result;
-    } finally {
-      renderTarget.dispose();
+      drawAnnotationsFn();
+    } catch (e) {
+      console.error('Annotation drawing error:', e);
     }
+
+    this.annotationRenderer.ctx = origCtx;
+    this.annotationRenderer.canvas = origCanvas;
+
+    return offCanvas.toDataURL('image/png');
   }
 
   async downloadPNG(dataUrl, filename = 'output.png') {
