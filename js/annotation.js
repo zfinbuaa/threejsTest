@@ -54,9 +54,11 @@ export class AnnotationRenderer {
   /**
    * Render horizontal annotations: circles aligned in vertical columns on left/right.
    */
-  renderAnnotations(numberedParts) {
-    this.resize();
-    this.clear();
+  renderAnnotations(numberedParts, skipResizeAndClear = false) {
+    if (!skipResizeAndClear) {
+      this.resize();
+      this.clear();
+    }
 
     if (numberedParts.length === 0) return [];
 

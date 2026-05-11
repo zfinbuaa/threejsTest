@@ -9,7 +9,7 @@ export class ExportManager {
 
   async exportPositionMap(numberedParts) {
     return this._composeAndExport(() => {
-      this.annotationRenderer.renderAnnotations(numberedParts);
+      this.annotationRenderer.renderAnnotations(numberedParts, true);
     });
   }
 
@@ -18,7 +18,7 @@ export class ExportManager {
       if (explosionData && explosionData.length > 0) {
         this.annotationRenderer.drawThrustLines(explosionData);
       }
-      this.annotationRenderer.renderAnnotations(numberedParts);
+      this.annotationRenderer.renderAnnotations(numberedParts, true);
     });
   }
 
@@ -43,13 +43,25 @@ export class ExportManager {
     const pixels = new Uint8Array(w * h * 4);
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
 
-    // Create a 2D canvas and write pixels (flip Y: WebGL origin is bottom-left)
+    // Create a 2D canvas for compositing
     const offCanvas = document.createElement('canvas');
     offCanvas.width = w;
     offCanvas.height = h;
     const offCtx = offCanvas.getContext('2d');
-    const imgData = offCtx.createImageData(w, h);
 
+    // Swap annotation renderer to offscreen canvas first (resize will match sizes)
+    const origCtx = this.annotationRenderer.ctx;
+    const origCanvas = this.annotationRenderer.canvas;
+    this.annotationRenderer.ctx = offCtx;
+    this.annotationRenderer.canvas = offCanvas;
+
+    // Resize annotation renderer (sets offCanvas size, clears it - which is fine
+    // because we'll write the 3D pixels next)
+    this.annotationRenderer.resize();
+    this.annotationRenderer.clear();
+
+    // Write 3D render pixels to the (now cleared) offscreen canvas
+    const imgData = offCtx.createImageData(w, h);
     for (let y = 0; y < h; y++) {
       const srcRow = (h - 1 - y) * w * 4;
       const dstRow = y * w * 4;
@@ -57,18 +69,14 @@ export class ExportManager {
     }
     offCtx.putImageData(imgData, 0, 0);
 
-    // Draw annotations on top
-    const origCtx = this.annotationRenderer.ctx;
-    const origCanvas = this.annotationRenderer.canvas;
-    this.annotationRenderer.ctx = offCtx;
-    this.annotationRenderer.canvas = offCanvas;
-
+    // Draw annotations on top of the 3D render
     try {
       drawAnnotationsFn();
     } catch (e) {
       console.error('Annotation drawing error:', e);
     }
 
+    // Restore original context
     this.annotationRenderer.ctx = origCtx;
     this.annotationRenderer.canvas = origCanvas;
 
