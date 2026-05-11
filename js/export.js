@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { AnnotationRenderer } from './annotation.js';
 
 export class ExportManager {
@@ -21,33 +22,57 @@ export class ExportManager {
     });
   }
 
+  /**
+   * Render scene to render target, read pixels, composite with annotations.
+   * This bypasses any toDataURL issues with WebGL canvases.
+   */
   _composeAndExport(drawAnnotationsFn) {
     const renderer = this.sceneManager.renderer;
     const camera = this.sceneManager.camera;
     const scene = this.sceneManager.scene;
 
-    // Force a render so the WebGL canvas has the latest frame
-    renderer.render(scene, camera);
+    const canvasEl = renderer.domElement;
+    const w = canvasEl.width || canvasEl.clientWidth || 800;
+    const h = canvasEl.height || canvasEl.clientHeight || 600;
 
-    // Get the 3D render as a data URL
-    const renderDataUrl = renderer.domElement.toDataURL('image/png');
+    if (w === 0 || h === 0) {
+      throw new Error('Canvas has zero size');
+    }
 
-    const w = renderer.domElement.width;
-    const h = renderer.domElement.height;
+    // Create a render target matching the main canvas
+    const renderTarget = new THREE.WebGLRenderTarget(w, h, {
+      format: THREE.RGBAFormat,
+      type: THREE.UnsignedByteType,
+    });
 
-    // Create an offscreen canvas for compositing
-    const offCanvas = document.createElement('canvas');
-    offCanvas.width = w;
-    offCanvas.height = h;
-    const offCtx = offCanvas.getContext('2d');
+    try {
+      // Render scene to the offscreen render target
+      renderer.setRenderTarget(renderTarget);
+      renderer.render(scene, camera);
+      renderer.setRenderTarget(null);
 
-    // Draw 3D render to offscreen canvas via Image
-    const img = new Image();
+      // Read pixels from the render target
+      const pixelBuffer = new Uint8Array(w * h * 4);
+      renderer.readRenderTargetPixels(renderTarget, 0, 0, w, h, pixelBuffer);
 
-    const doComposite = () => {
-      offCtx.drawImage(img, 0, 0, w, h);
+      // Create a 2D canvas and write pixels (flip Y: WebGL bottom-left → Canvas top-left)
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width = w;
+      offCanvas.height = h;
+      const offCtx = offCanvas.getContext('2d');
+      const imgData = offCtx.createImageData(w, h);
 
-      // Temporarily point the annotation renderer at the offscreen canvas
+      for (let y = 0; y < h; y++) {
+        const srcRow = (h - 1 - y) * w * 4;
+        const dstRow = y * w * 4;
+        imgData.data.set(
+          pixelBuffer.subarray(srcRow, srcRow + w * 4),
+          dstRow
+        );
+      }
+      offCtx.putImageData(imgData, 0, 0);
+
+      // Draw annotations on top
       const origCtx = this.annotationRenderer.ctx;
       const origCanvas = this.annotationRenderer.canvas;
       this.annotationRenderer.ctx = offCtx;
@@ -59,31 +84,14 @@ export class ExportManager {
         console.error('Annotation drawing error:', e);
       }
 
-      // Restore original context
       this.annotationRenderer.ctx = origCtx;
       this.annotationRenderer.canvas = origCanvas;
 
-      return offCanvas.toDataURL('image/png');
-    };
-
-    return new Promise((resolve, reject) => {
-      img.onload = () => resolve(doComposite());
-
-      img.onerror = () => {
-        console.error('Failed to load render data URL');
-        reject(new Error('无法加载渲染图像'));
-      };
-
-      // Set src AFTER setting handlers, and check for immediate load
-      img.src = renderDataUrl;
-
-      // Data URLs may load synchronously; if already loaded, resolve now
-      if (img.complete) {
-        img.onload = null;
-        img.onerror = null;
-        resolve(doComposite());
-      }
-    });
+      const result = offCanvas.toDataURL('image/png');
+      return result;
+    } finally {
+      renderTarget.dispose();
+    }
   }
 
   async downloadPNG(dataUrl, filename = 'output.png') {
