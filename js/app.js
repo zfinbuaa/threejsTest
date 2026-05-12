@@ -84,13 +84,8 @@ class App {
       // Electron API
       this._setupElectronAPI();
 
-      // Load placeholder models for demo
-      try {
-        await this._loadPlaceholders();
-      } catch (err) {
-        console.error('Placeholder load failed:', err);
-        this._setStatus('示例模型加载失败，可手动加载VRML文件');
-      }
+      // Auto-load models from models/ folder
+      this._setupAutoLoad();
 
       // Handle resize
       this._onResize = () => {
@@ -175,17 +170,27 @@ class App {
     });
   }
 
-  async _loadPlaceholders() {
+  _setupAutoLoad() {
+    if (!window.electronAPI) {
+      // Browser mode: load placeholders for demo
+      this._loadPlaceholders();
+      return;
+    }
+
+    // Listen for no-auto-models event (no .wrl files found in models/)
+    window.electronAPI.onNoAutoModels(() => {
+      this._setStatus('未找到数模文件。请将.wrl车壳放入 models/shells/，部件放入 models/parts/，或通过菜单手动加载。');
+    });
+  }
+
+  _loadPlaceholders() {
     this._setStatus('正在加载示例模型...');
 
-    // Create placeholder car body
-    const shellGroup = ModelLoader.createPlaceholderCarBody();
     const loader = new ModelLoader();
+    const shellGroup = ModelLoader.createPlaceholderCarBody();
     const shellData = loader._processModel(shellGroup, '示例车壳.wrl');
     shellData.fileName = '示例车壳';
     shellData._isShell = true;
-
-    // Set transparency
     ModelLoader.setModelTransparency(shellData.root, 0.7, true);
 
     this.positionMap.shellModels.push(shellData);
@@ -194,26 +199,21 @@ class App {
     this.positionMap.activeShellIndex = 0;
     this.positionMap._updateShellList();
 
-    // Create placeholder target parts
     const partsGroup = ModelLoader.createPlaceholderParts();
     const partsData = loader._processModel(partsGroup, '示例部件.wrl');
     partsData.fileName = '示例部件';
     partsData._isPart = true;
 
-    // Position map parts
     this.positionMap.partModels.push(partsData);
-    const partMeshesPos = ModelLoader.getAllMeshes(partsData.root);
-    this.positionMap.partMeshes.push(...partMeshesPos);
+    this.positionMap.partMeshes.push(...ModelLoader.getAllMeshes(partsData.root));
 
-    // Create separate copy for explosion view
     const partsGroup2 = ModelLoader.createPlaceholderParts();
     const partsData2 = loader._processModel(partsGroup2, '示例部件.wrl');
     partsData2.fileName = '示例部件';
     partsData2._isPart = true;
 
     this.explosionView.partModels.push(partsData2);
-    const partMeshesExp = ModelLoader.getAllMeshes(partsData2.root);
-    partMeshesExp.forEach((mesh) => {
+    ModelLoader.getAllMeshes(partsData2.root).forEach((mesh) => {
       this.explosionView.partMeshes.push(mesh);
       const pos = ModelLoader.getMeshWorldCenter(mesh);
       this.explosionView.originalPositions.set(mesh, pos.clone());
@@ -222,16 +222,12 @@ class App {
 
     this.sceneManager.addModel(partsData.root);
     this.sceneManager.addModel(partsData2.root);
-
-    // Initially hide explosion parts
     partsData2.root.visible = false;
 
     this.positionMap._updatePartTree();
     this.explosionView._updatePartTree();
 
-    // Focus camera on models
     this.sceneManager.focusOn(this.sceneManager.getModelContainer());
-
     this._setStatus('示例模型加载完成。可通过菜单加载VRML文件或直接操作。');
   }
 

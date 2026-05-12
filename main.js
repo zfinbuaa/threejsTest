@@ -17,6 +17,49 @@ function getModelsPath() {
   return modelsPath;
 }
 
+function autoLoadModels() {
+  const fs = require('fs');
+  const baseDir = getModelsPath();
+
+  // Scan shells directory
+  const shellsDir = path.join(baseDir, 'shells');
+  let shellFiles = [];
+  if (fs.existsSync(shellsDir)) {
+    shellFiles = fs.readdirSync(shellsDir)
+      .filter(f => /\.(wrl|vrml)$/i.test(f))
+      .map(f => path.join(shellsDir, f));
+  }
+
+  // Scan parts directory
+  const partsDir = path.join(baseDir, 'parts');
+  let partFiles = [];
+  if (fs.existsSync(partsDir)) {
+    partFiles = fs.readdirSync(partsDir)
+      .filter(f => /\.(wrl|vrml)$/i.test(f))
+      .map(f => path.join(partsDir, f));
+  }
+
+  // Send to renderer once ready
+  const sendModels = () => {
+    if (shellFiles.length > 0) {
+      mainWindow.webContents.send('load-shell-models', shellFiles);
+    }
+    if (partFiles.length > 0) {
+      mainWindow.webContents.send('load-part-models', partFiles);
+    }
+    if (shellFiles.length === 0 && partFiles.length === 0) {
+      mainWindow.webContents.send('no-auto-models');
+    }
+  };
+
+  // Wait for renderer to be ready
+  mainWindow.webContents.on('did-finish-load', sendModels);
+  // Fallback: if already loaded
+  if (mainWindow.webContents.isLoading() === false) {
+    sendModels();
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -32,6 +75,9 @@ function createWindow() {
   });
 
   mainWindow.loadFile('index.html');
+
+  // Auto-load models from models/shells/ and models/parts/
+  autoLoadModels();
 
   const template = [
     {
